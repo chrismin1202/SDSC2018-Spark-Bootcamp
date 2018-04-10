@@ -1,5 +1,7 @@
 package chrism.sdsc.spam
 
+import java.nio.file.{Files, Path, Paths}
+
 import org.apache.spark.ml.classification.NaiveBayes
 import org.apache.spark.ml.evaluation.BinaryClassificationEvaluator
 import org.apache.spark.ml.feature._
@@ -8,6 +10,7 @@ import org.apache.spark.ml.tuning.{CrossValidator, CrossValidatorModel, ParamGri
 import org.apache.spark.sql.{Dataset, SparkSession}
 
 import scala.io.Source
+import scala.reflect.io.File
 import scala.util.matching.Regex
 
 object SpamDetector {
@@ -49,6 +52,13 @@ object SpamDetector {
     println(s"area under PR: ${model.getEvaluator.evaluate(predictions)}")
 
     spark.stop()
+  }
+
+  def loadModel(/* IO */)(implicit spark: SparkSession): CrossValidatorModel = {
+    require(
+      Files.exists(Paths.get(Seq(NaiveBayesModelPath).mkString(File.separator))),
+      s"The model does not exists at $NaiveBayesModelPath")
+    CrossValidatorModel.load(NaiveBayesModelPath)
   }
 
   private def trainModel(trainingDs: Dataset[EncodedDataRow])(implicit spark: SparkSession): CrossValidatorModel = {
