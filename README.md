@@ -1,2 +1,3 @@
 # SDSC2018-Spark-Bootcamp
-SDSC2018 Spark Bootcamp Code Samples
+
+This repository contains code samples for Apache Spark/Spark MLlib Workshop @ [SDSC](https://www.southerndatascience.com/) 2018.
