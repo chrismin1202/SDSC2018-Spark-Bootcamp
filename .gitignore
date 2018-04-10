@@ -10,3 +10,4 @@ target/
 .idea/modules.xml
 .idea/sbt.xml
 .idea/vcs.xml
+.idea/uiDesigner.xml

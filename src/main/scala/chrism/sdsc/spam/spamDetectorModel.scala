@@ -1,19 +1,19 @@
 package chrism.sdsc.spam
 
-import java.nio.file.{Files, Path, Paths}
+import java.nio.file.{Files, Paths}
 
 import org.apache.spark.ml.classification.NaiveBayes
 import org.apache.spark.ml.evaluation.BinaryClassificationEvaluator
 import org.apache.spark.ml.feature._
-import org.apache.spark.ml.{Pipeline, linalg}
 import org.apache.spark.ml.tuning.{CrossValidator, CrossValidatorModel, ParamGridBuilder}
+import org.apache.spark.ml.{Pipeline, linalg}
 import org.apache.spark.sql.{Dataset, SparkSession}
 
 import scala.io.Source
 import scala.reflect.io.File
 import scala.util.matching.Regex
 
-object SpamDetector {
+object SpamDetectorModel {
 
   private val RawCsvDataPath: String = "/chrism/sdsc/spam/spam.csv" // relative to resources directory
   private val NaiveBayesModelPath: String = "target/tmp/naiveBayesModel"
