@@ -1,9 +1,11 @@
 package chrism.sdsc.spam
 
-import org.apache.spark.ml.classification.{NaiveBayes, NaiveBayesModel}
-import org.apache.spark.ml.feature.{LabeledPoint, OneHotEncoderEstimator, StringIndexer}
-import org.apache.spark.ml.linalg
-import org.apache.spark.sql.{Dataset, SparkSession}
+import org.apache.spark.ml.Pipeline
+import org.apache.spark.ml.classification.NaiveBayes
+import org.apache.spark.ml.evaluation.BinaryClassificationEvaluator
+import org.apache.spark.ml.feature._
+import org.apache.spark.ml.tuning.{CrossValidator, CrossValidatorModel, ParamGridBuilder}
+import org.apache.spark.sql.{DataFrame, Dataset, SparkSession}
 
 import scala.io.Source
 
@@ -18,45 +20,68 @@ object SpamDetector {
       .master("local[*]")
       .getOrCreate()
 
-    import spark.implicits._
-
-    val spamDs = loadSpamData()
-
-    val indexer = new StringIndexer()
-      .setInputCol("text")
-      .setOutputCol("textIndex")
-      .fit(spamDs)
-
-    val indexed = indexer.transform(spamDs)
-
-    val encoder = new OneHotEncoderEstimator()
-      .setInputCols(Array("textIndex"))
-      .setOutputCols(Array("textVec"))
-      .fit(indexed)
-
-    val encoded = encoder
-      .transform(indexed)
-      .as[EncodedRow]
+    val spamDs = encodeSpamData()
 
     // Split data into training and testing
-    val Array(training, test) = encoded
-      .map(_.toLabeledPoint)
+    val Array(training, test) = spamDs
       .randomSplit(Array(0.7, 0.3))
 
-    // Train and save model
-    new NaiveBayes()
+    // Create a pipeline for training a model
+    val naiveBayesClassifier = new NaiveBayes()
+      .setLabelCol("indexedLabel")
+      .setFeaturesCol("textVec")
+
+    val evaluator = new BinaryClassificationEvaluator()
+      .setLabelCol("indexedLabel")
+      .setMetricName("areaUnderPR")
+
+    val params = new ParamGridBuilder().build()
+
+    // use cross-validator for tuning
+    new CrossValidator()
+      .setEstimator(naiveBayesClassifier)
+      .setEvaluator(evaluator)
+      .setEstimatorParamMaps(params)
+      .setNumFolds(3)
       .fit(training)
       .write
       .overwrite()
       .save(NaiveBayesModelPath)
 
     // Load the saved model
-    val model = NaiveBayesModel.load(NaiveBayesModelPath)
+    val model = CrossValidatorModel.load(NaiveBayesModelPath)
 
-    model.transform(test)
-      .show(20)
+    model.transform(test).show(30)
+
 
     spark.stop()
+  }
+
+  private def encodeSpamData(/* IO */)(implicit spark: SparkSession): DataFrame = {
+    val spamDs = loadSpamData()
+
+    // Index the labels
+    val indexer = new StringIndexer()
+      .setInputCol("label")
+      .setOutputCol("indexedLabel")
+
+    // Tokenize text messages
+    val tokenizer = new Tokenizer()
+      .setInputCol("text")
+      .setOutputCol("tokens")
+
+    // Vectorize the tokenized text messages
+    val vectorizer = new CountVectorizer()
+      .setInputCol("tokens")
+      .setOutputCol("textVec")
+
+    // Create a pipeline for encoding the raw CSV data
+    val pipeline = new Pipeline()
+      .setStages(Array(indexer, tokenizer, vectorizer))
+
+    pipeline
+      .fit(spamDs)
+      .transform(spamDs)
   }
 
   private def loadSpamData(/* IO */)(implicit spark: SparkSession): Dataset[DataRow] = {
@@ -74,10 +99,3 @@ object SpamDetector {
 }
 
 private final case class DataRow(label: String, text: String)
-
-private final case class EncodedRow(label: String, text: String, textIndex: Double, textVec: linalg.Vector) {
-
-  def toLabeledPoint: LabeledPoint = LabeledPoint(encodeLabel, textVec)
-
-  private def encodeLabel: Double = if (label == "spam") 0.0 else 1.0
-}
