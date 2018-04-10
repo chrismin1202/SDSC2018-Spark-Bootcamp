@@ -1,4 +1,12 @@
-.idea/
+#.idea/
 target/
-*.xml
+#*.xml
 *.iml
+.idea/workspace.xml
+.idea/libraries/
+.idea/scala_compiler.xml
+.idea/hydra.xml
+.idea/misc.xml
+.idea/modules.xml
+.idea/sbt.xml
+.idea/vcs.xml
