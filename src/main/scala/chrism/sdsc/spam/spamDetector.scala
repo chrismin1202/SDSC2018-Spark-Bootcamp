@@ -1,13 +1,14 @@
 package chrism.sdsc.spam
 
-import org.apache.spark.ml.Pipeline
 import org.apache.spark.ml.classification.NaiveBayes
 import org.apache.spark.ml.evaluation.BinaryClassificationEvaluator
 import org.apache.spark.ml.feature._
+import org.apache.spark.ml.{Pipeline, linalg}
 import org.apache.spark.ml.tuning.{CrossValidator, CrossValidatorModel, ParamGridBuilder}
-import org.apache.spark.sql.{DataFrame, Dataset, SparkSession}
+import org.apache.spark.sql.{Dataset, SparkSession}
 
 import scala.io.Source
+import scala.util.matching.Regex
 
 object SpamDetector {
 
@@ -20,30 +21,22 @@ object SpamDetector {
       .master("local[*]")
       .getOrCreate()
 
-    val spamDs = encodeSpamData()
-
     // Split data into training and testing
-    val Array(training, test) = spamDs
-      .randomSplit(Array(0.7, 0.3))
+    val encodedSpamDs = encodeSpamData().cache()
 
-    // Create a pipeline for training a model
-    val naiveBayesClassifier = new NaiveBayes()
-      .setLabelCol("indexedLabel")
-      .setFeaturesCol("textVec")
+    val Array(hamTrainingDs, hamTestDs) = encodedSpamDs
+      .filter(_.label == "ham")
+      .randomSplit(Array(0.6, 0.4), 7L)
 
-    val evaluator = new BinaryClassificationEvaluator()
-      .setLabelCol("indexedLabel")
-      .setMetricName("areaUnderPR")
+    val Array(spamTrainingDs, spamTestDs) = encodedSpamDs
+      .filter(_.label == "spam")
+      .randomSplit(Array(0.6, 0.4), 7L)
 
-    val params = new ParamGridBuilder().build()
+    val trainingDs = hamTrainingDs.union(spamTrainingDs)
+    val testDs = hamTestDs.union(spamTestDs)
 
-    // use cross-validator for tuning
-    new CrossValidator()
-      .setEstimator(naiveBayesClassifier)
-      .setEvaluator(evaluator)
-      .setEstimatorParamMaps(params)
-      .setNumFolds(3)
-      .fit(training)
+    // train and persist the model
+    trainModel(trainingDs)
       .write
       .overwrite()
       .save(NaiveBayesModelPath)
@@ -51,13 +44,42 @@ object SpamDetector {
     // Load the saved model
     val model = CrossValidatorModel.load(NaiveBayesModelPath)
 
-    model.transform(test).show(30)
+    val predictions = model.bestModel.transform(testDs)
 
+    println(s"area under PR: ${model.getEvaluator.evaluate(predictions)}")
 
     spark.stop()
   }
 
-  private def encodeSpamData(/* IO */)(implicit spark: SparkSession): DataFrame = {
+  private def trainModel(trainingDs: Dataset[EncodedDataRow])(implicit spark: SparkSession): CrossValidatorModel = {
+    // Create a pipeline for training a model
+    val naiveBayesClassifier = new NaiveBayes()
+      .setLabelCol("indexedLabel")
+      .setFeaturesCol("textVec")
+
+    // check distribution of data spam vs. ham
+
+    val evaluator = new BinaryClassificationEvaluator()
+      .setLabelCol("indexedLabel")
+      .setMetricName("areaUnderPR") // should be 0.95
+
+    val params = new ParamGridBuilder()
+      .addGrid(naiveBayesClassifier.smoothing, 0.0 to 1.0 by 0.005)
+      .addGrid(naiveBayesClassifier.modelType, Array("multinomial"))
+      .build()
+
+    // use cross-validator for tuning
+    new CrossValidator()
+      .setEstimator(naiveBayesClassifier)
+      .setEstimatorParamMaps(params)
+      .setEvaluator(evaluator)
+      .setNumFolds(3)
+      .fit(trainingDs)
+  }
+
+  private def encodeSpamData(/* IO */)(implicit spark: SparkSession): Dataset[EncodedDataRow] = {
+    import spark.implicits._
+
     val spamDs = loadSpamData()
 
     // Index the labels
@@ -82,6 +104,7 @@ object SpamDetector {
     pipeline
       .fit(spamDs)
       .transform(spamDs)
+      .as[EncodedDataRow]
   }
 
   private def loadSpamData(/* IO */)(implicit spark: SparkSession): Dataset[DataRow] = {
@@ -90,12 +113,22 @@ object SpamDetector {
     spark.createDataset(loadCsv())
   }
 
+  private val StartsWith: Regex = "^ham|spam".r
+
   private def loadCsv(/* IO */): Seq[DataRow] =
     Source.fromInputStream(getClass.getResourceAsStream(RawCsvDataPath), "UTF-8")
       .getLines()
+      .filter(StartsWith.findFirstIn(_).isDefined)
       .map(_.split(",", 2))
       .map(a => DataRow(a(0), a(1)))
       .toSeq
 }
 
 private final case class DataRow(label: String, text: String)
+
+private final case class EncodedDataRow(
+    label: String,
+    text: String,
+    indexedLabel: Double,
+    tokens: Seq[String],
+    textVec: linalg.Vector)
