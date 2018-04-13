@@ -7,7 +7,8 @@ import org.apache.spark.ml.evaluation.BinaryClassificationEvaluator
 import org.apache.spark.ml.feature._
 import org.apache.spark.ml.tuning.{CrossValidator, CrossValidatorModel, ParamGridBuilder}
 import org.apache.spark.ml.{Pipeline, linalg}
-import org.apache.spark.sql.{Dataset, SparkSession}
+import org.apache.spark.sql.types.{DataTypes, StructField}
+import org.apache.spark.sql.{Dataset, Row, SparkSession, functions}
 
 import scala.io.Source
 import scala.reflect.io.File
@@ -20,12 +21,12 @@ object SpamDetectorModel {
 
   def main(args: Array[String]): Unit = {
     implicit val spark: SparkSession = SparkSession.builder()
-      .appName("Spam Detector")
+      .appName("Spam Detector Model Creator")
       .master("local[*]")
       .getOrCreate()
 
     // Split data into training and testing
-    val encodedSpamDs = encodeSpamData().cache()
+    val encodedSpamDs = encodeSpamData(loadSpamData()).cache()
 
     val Array(hamTrainingDs, hamTestDs) = encodedSpamDs
       .filter(_.label == "ham")
@@ -35,8 +36,12 @@ object SpamDetectorModel {
       .filter(_.label == "spam")
       .randomSplit(Array(0.6, 0.4), 7L)
 
+
+
     val trainingDs = hamTrainingDs.union(spamTrainingDs)
     val testDs = hamTestDs.union(spamTestDs)
+
+    testDs.rdd.map(r => Row(r.label, r.text, r.indexedLabel + r.indexedLabel))
 
     // train and persist the model
     trainModel(trainingDs)
@@ -54,7 +59,7 @@ object SpamDetectorModel {
     spark.stop()
   }
 
-  def loadModel(/* IO */)(implicit spark: SparkSession): CrossValidatorModel = {
+  def loadModel(/* IO */)/*(implicit spark: SparkSession)*/: CrossValidatorModel = {
     require(
       Files.exists(Paths.get(Seq(NaiveBayesModelPath).mkString(File.separator))),
       s"The model does not exists at $NaiveBayesModelPath")
@@ -68,6 +73,10 @@ object SpamDetectorModel {
       .setFeaturesCol("textVec")
 
     // check distribution of data spam vs. ham
+
+    List(1,2,3).collect({
+      case 1 => ""
+    })
 
     val evaluator = new BinaryClassificationEvaluator()
       .setLabelCol("indexedLabel")
@@ -87,10 +96,10 @@ object SpamDetectorModel {
       .fit(trainingDs)
   }
 
-  private def encodeSpamData(/* IO */)(implicit spark: SparkSession): Dataset[EncodedDataRow] = {
+  def encodeSpamData(spamDs: Dataset[DataRow])(implicit spark: SparkSession): Dataset[EncodedDataRow] = {
     import spark.implicits._
 
-    val spamDs = loadSpamData()
+//    val spamDs = loadSpamData()
 
     // Index the labels
     val indexer = new StringIndexer()
@@ -134,9 +143,9 @@ object SpamDetectorModel {
       .toSeq
 }
 
-private final case class DataRow(label: String, text: String)
+final case class DataRow(label: String, text: String)
 
-private final case class EncodedDataRow(
+final case class EncodedDataRow(
     label: String,
     text: String,
     indexedLabel: Double,
