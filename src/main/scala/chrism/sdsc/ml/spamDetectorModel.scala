@@ -1,4 +1,4 @@
-package chrism.sdsc.spam
+package chrism.sdsc.ml
 
 import java.nio.file.{Files, Paths}
 
