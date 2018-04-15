@@ -6,7 +6,6 @@ trait Runner {
 
   final def main(args: Array[String]): Unit = {
     val spark: SparkSession = SparkSession.builder()
-      .appName("Spam Detector Model Creator")
       .master("local[*]")
       .getOrCreate()
 

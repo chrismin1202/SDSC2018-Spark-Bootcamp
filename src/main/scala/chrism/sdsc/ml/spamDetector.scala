@@ -1,71 +1,127 @@
 package chrism.sdsc.ml
 
-import org.apache.spark.SparkConf
-import org.apache.spark.sql.SparkSession
-import org.apache.spark.storage.StorageLevel
-import org.apache.spark.streaming.{Seconds, StreamingContext}
+import chrism.sdsc.Runner
+import org.apache.spark.ml.classification.NaiveBayes
+import org.apache.spark.ml.evaluation.BinaryClassificationEvaluator
+import org.apache.spark.ml.feature._
+import org.apache.spark.ml.tuning.{CrossValidator, CrossValidatorModel, ParamGridBuilder}
+import org.apache.spark.ml.{Pipeline, linalg}
+import org.apache.spark.sql.{Dataset, SparkSession}
 
-object SpamDetector {
+import scala.io.Source
+import scala.util.matching.Regex
 
-  private val Host: String = "localhost"
-  private val Port: Int = 9999
+object SpamDetector extends Runner {
 
-  def main(args: Array[String]): Unit = {
+  private val RawCsvDataPath: String = "/chrism/sdsc/ml/spam.csv" // relative to resources directory
+  private val NaiveBayesModelPath: String = "target/tmp/naiveBayesModel"
 
-    val sparkConf = new SparkConf().setAppName("Spam Detector").setMaster("local[*]")
-    val ssc = new StreamingContext(sparkConf, Seconds(15))
-
-//    implicit val spark: SparkSession = SparkSession.builder()
-//      .config(sparkConf)
-////          .appName("Spam Detector")
-////          .master("local[*]")
-//          .getOrCreate()
-
-//    import spark.implicits._
-
-    lazy val model = SpamDetectorModel.loadModel()
-
-    val texts = ssc.socketTextStream(Host, Port, StorageLevel.MEMORY_AND_DISK_SER)
+  private val StartsWith: Regex = "^ham|spam".r // just to filter out bad rows if any
 
 
-    texts.map(_.split(",",2))
-      .map(r => DataRow(r(0), r(1)))
-      .foreachRDD(rdd => {
-        // Get the singleton instance of SparkSession
-        implicit val spark: SparkSession = SparkSessionSingleton.getOrCreate(rdd.sparkContext.getConf)
+  override def run(args: Array[String])(implicit spark: SparkSession): Unit = {
+    // Split data into training and testing
+    val encodedSpamDs = encodeSpamData(loadSpamData()).cache()
 
-        import spark.implicits._
+    val Array(hamTrainingDs, hamTestDs) = encodedSpamDs
+      .filter(_.label == "ham")
+      .randomSplit(Array(0.6, 0.4), 7L)
 
-      val dataRowDs = rdd.toDS()
-      val encodedDs = SpamDetectorModel.encodeSpamData(dataRowDs).cache()
+    val Array(spamTrainingDs, spamTestDs) = encodedSpamDs
+      .filter(_.label == "spam")
+      .randomSplit(Array(0.6, 0.4), 7L)
 
-      encodedDs.show(10)
-      val collected = model.bestModel.transform(encodedDs)
-        .collect()
-      encodedDs.unpersist()
-      collected.foreach(println)
-    })
+    val trainingDs = hamTrainingDs.union(spamTrainingDs)
+    val testDs = hamTestDs.union(spamTestDs)
 
-    ssc.start()
-    ssc.awaitTermination()
+    // train and persist the model
+    trainModel(trainingDs)
+      .write
+      .overwrite()
+      .save(NaiveBayesModelPath)
+
+    // Load the saved model (just to demo that trained models can be persisted and used later)
+    val model = CrossValidatorModel.load(NaiveBayesModelPath)
+
+    val predictions = model.bestModel.transform(testDs)
+
+    println(s"area under PR: ${model.getEvaluator.evaluate(predictions)}")
   }
+
+  private def trainModel(trainingDs: Dataset[EncodedDataRow])(implicit spark: SparkSession): CrossValidatorModel = {
+    // Create a pipeline for training a model
+    val naiveBayesClassifier = new NaiveBayes()
+      .setLabelCol("indexedLabel")
+      .setFeaturesCol("textVec")
+
+    // check distribution of data spam vs. ham
+
+    val evaluator = new BinaryClassificationEvaluator()
+      .setLabelCol("indexedLabel")
+      .setMetricName("areaUnderPR") // should be 0.95
+
+    val params = new ParamGridBuilder()
+      .addGrid(naiveBayesClassifier.smoothing, 0.0 to 1.0 by 0.005)
+      .addGrid(naiveBayesClassifier.modelType, Array("multinomial"))
+      .build()
+
+    // use cross-validator for tuning
+    new CrossValidator()
+      .setEstimator(naiveBayesClassifier)
+      .setEstimatorParamMaps(params)
+      .setEvaluator(evaluator)
+      .setNumFolds(3)
+      .fit(trainingDs)
+  }
+
+  private def encodeSpamData(spamDs: Dataset[DataRow])(implicit spark: SparkSession): Dataset[EncodedDataRow] = {
+    import spark.implicits._
+
+    // Index the labels
+    val indexer = new StringIndexer()
+      .setInputCol("label")
+      .setOutputCol("indexedLabel")
+
+    // Tokenize text messages
+    val tokenizer = new Tokenizer()
+      .setInputCol("text")
+      .setOutputCol("tokens")
+
+    // Vectorize the tokenized text messages
+    val vectorizer = new CountVectorizer()
+      .setInputCol("tokens")
+      .setOutputCol("textVec")
+
+    // Create a pipeline for encoding the raw CSV data
+    val pipeline = new Pipeline()
+      .setStages(Array(indexer, tokenizer, vectorizer))
+
+    pipeline
+      .fit(spamDs)
+      .transform(spamDs)
+      .as[EncodedDataRow]
+  }
+
+  private def loadSpamData(/* IO */)(implicit spark: SparkSession): Dataset[DataRow] = {
+    import spark.implicits._
+
+    spark.createDataset(loadCsv())
+  }
+
+  private def loadCsv(/* IO */): Seq[DataRow] =
+    Source.fromInputStream(getClass.getResourceAsStream(RawCsvDataPath), "UTF-8")
+      .getLines()
+      .filter(StartsWith.findFirstIn(_).isDefined)
+      .map(_.split(",", 2))
+      .map(a => DataRow(a(0), a(1)))
+      .toSeq
 }
 
-/** Lazily instantiated singleton instance of SparkSession.
-  *
-  * From [[https://github.com/apache/spark/blob/v2.3.0/examples/src/main/scala/org/apache/spark/examples/streaming/SqlNetworkWordCount.scala Spark Streaming Example]]
-  */
-private object SparkSessionSingleton {
+final case class DataRow(label: String, text: String)
 
-  @transient
-  private var instance: SparkSession = _
-
-  def getOrCreate(sparkConf: SparkConf): SparkSession = {
-    if (instance == null) {
-      instance = SparkSession.builder()
-        .config(sparkConf)
-        .getOrCreate()
-    }
-    instance
-  }
-}
+final case class EncodedDataRow(
+    label: String,
+    text: String,
+    indexedLabel: Double,
+    tokens: Seq[String],
+    textVec: linalg.Vector)
