@@ -1,4 +1,4 @@
-package chrism.sdsc.bad
+package chrism.sdsc.tasknotserializable
 
 import chrism.sdsc.Runner
 import org.apache.spark.sql.{Dataset, SparkSession}
