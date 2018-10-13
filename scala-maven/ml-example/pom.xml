@@ -28,8 +28,20 @@
 
         <!-- test dependencies -->
         <dependency>
+            <groupId>junit</groupId>
+            <artifactId>junit</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
             <groupId>org.scalatest</groupId>
             <artifactId>scalatest_${scala.version.prefix}</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>chrism.sdsc</groupId>
+            <artifactId>common</artifactId>
+            <version>${demo.version}</version>
+            <type>test-jar</type>
             <scope>test</scope>
         </dependency>
     </dependencies>

@@ -1,4 +1,4 @@
-package chrism.sdsc
+package chrism.sdsc.spark
 
 import org.apache.spark.sql.SparkSession
 
