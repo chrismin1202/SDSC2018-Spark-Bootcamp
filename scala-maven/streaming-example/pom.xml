@@ -25,12 +25,5 @@
             <artifactId>spark-streaming_${scala.version.prefix}</artifactId>
             <version>${spark.version}</version>
         </dependency>
-
-        <!-- test dependencies -->
-        <dependency>
-            <groupId>org.scalatest</groupId>
-            <artifactId>scalatest_${scala.version.prefix}</artifactId>
-            <scope>test</scope>
-        </dependency>
     </dependencies>
 </project>

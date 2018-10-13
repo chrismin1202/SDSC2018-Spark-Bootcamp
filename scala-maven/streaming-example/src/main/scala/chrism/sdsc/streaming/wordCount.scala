@@ -18,7 +18,6 @@ import scala.util.matching.Regex
   *    In Windows, either install Netcat or find a similar tool.
   * 3. Start streaming text data either by copying & pasting or typing and observe how the job processes the streamed data.
   *
-  *
   * Refer to [[https://github.com/apache/spark/blob/v2.3.0/examples/src/main/scala/org/apache/spark/examples/streaming/SqlNetworkWordCount.scala Spark Streaming Example]]
   */
 object WordCount {
@@ -31,7 +30,7 @@ object WordCount {
   private val OrderByCol: Column = functions.col("frequency").desc
 
   def main(args: Array[String]): Unit = {
-    val sparkConf = new SparkConf().setAppName("Spam Detector").setMaster("local[*]")
+    val sparkConf = new SparkConf().setAppName("Word Count").setMaster("local[*]")
     val ssc = new StreamingContext(sparkConf, Seconds(15))
 
     val texts = ssc.socketTextStream(Host, Port, StorageLevel.MEMORY_AND_DISK_SER)
@@ -51,7 +50,7 @@ object WordCount {
         .map(_._2)
         .orderBy(OrderByCol)
 
-      wordFrequencyDs.show(10, truncate = false)
+      wordFrequencyDs.show(200, truncate = false)
     })
 
     ssc.start()
