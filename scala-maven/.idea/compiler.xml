@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="CompilerConfiguration">
+    <annotationProcessing>
+      <profile name="Maven default annotation processors profile" enabled="true">
+        <sourceOutputDir name="target/generated-sources/annotations" />
+        <sourceTestOutputDir name="target/generated-test-sources/test-annotations" />
+        <outputRelativeToContentRoot value="true" />
+        <module name="common" />
+        <module name="ml-example" />
+        <module name="streaming-example" />
+        <module name="uber" />
+      </profile>
+    </annotationProcessing>
+    <bytecodeTargetLevel>
+      <module name="common" target="1.8" />
+      <module name="Edge" target="1.8" />
+      <module name="ml-example" target="1.8" />
+      <module name="streaming-example" target="1.8" />
+      <module name="uber" target="1.8" />
+    </bytecodeTargetLevel>
+  </component>
+</project>
