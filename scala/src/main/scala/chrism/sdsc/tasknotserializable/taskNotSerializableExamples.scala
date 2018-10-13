@@ -8,7 +8,7 @@ object NotSerializableVersion extends Runner {
   override def run(args: Array[String])(implicit spark: SparkSession): Unit = {
     import spark.implicits._
 
-    // If you run this example, you will get "org.apache.spark.SparkException: Task not serializable".
+    // If you run this example, you will get "org.apache.spark.SparkException Task not serializable".
     new NotSerializableJob("number")
       .prepend((1 to 10).toDS())
       .show(10, truncate = false)
@@ -32,9 +32,10 @@ object SerializableVersion extends Runner {
   override def run(args: Array[String])(implicit spark: SparkSession): Unit = {
     import spark.implicits._
 
-    // The solution is rather simple.
-    // You just need to isolate the executor code from the driver code.
-
+    // If you run this example, you will not get "org.apache.spark.SparkException Task not serializable".
+    // It is rather simple to get around java.io.NotSerializableException,
+    // which is the cause exception of org.apache.spark.SparkException thrown by NotSerializableVersion.
+    // You just need to isolate the executor from the driver code.
     new SerializableJob("number")
       .prepend((1 to 10).toDS())
       .show(10, truncate = false)
@@ -50,7 +51,8 @@ object SerializableVersion extends Runner {
     private def prependHelper(numDs: Dataset[Int], prefix: String)(implicit spark: SparkSession): Dataset[String] = {
       import spark.implicits._
 
-      // The task is now serializable because the closure (num => value + num) no longer depends on the state of the class.
+      // The task is now serializable because the closure (num => value + num)
+      // no longer depends on the state of the class.
       numDs.map(num => prefix + num)
     }
   }
