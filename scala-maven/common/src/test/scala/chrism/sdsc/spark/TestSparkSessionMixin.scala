@@ -1,5 +1,6 @@
-package chrism.sdsc
+package chrism.sdsc.spark
 
+import chrism.sdsc.TestSuite
 import org.apache.spark.sql.SparkSession
 import org.scalatest.{BeforeAndAfterAll, SuiteMixin}
 

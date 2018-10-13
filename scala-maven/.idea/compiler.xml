@@ -16,6 +16,7 @@
       <module name="common" target="1.8" />
       <module name="Edge" target="1.8" />
       <module name="ml-example" target="1.8" />
+      <module name="scala-spark" target="1.8" />
       <module name="streaming-example" target="1.8" />
       <module name="uber" target="1.8" />
     </bytecodeTargetLevel>
