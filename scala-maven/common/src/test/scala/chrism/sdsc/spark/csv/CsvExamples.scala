@@ -68,6 +68,7 @@ final class CsvExamples extends TestSuite with TestSparkSessionMixin with TestHa
 
     df.unpersist()
   }
+  spark.read.
 
   override protected def beforeAll(): Unit = {
     super.beforeAll()
