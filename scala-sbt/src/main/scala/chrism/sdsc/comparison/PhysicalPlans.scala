@@ -1,6 +1,7 @@
 package chrism.sdsc.comparison
 
 import chrism.sdsc.Runner
+import chrism.sdsc.model.CountableWord
 import org.apache.spark.sql.types.DataTypes
 import org.apache.spark.sql.{DataFrame, Dataset, SparkSession}
 

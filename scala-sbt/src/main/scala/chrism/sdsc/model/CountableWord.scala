@@ -1,4 +1,4 @@
-package chrism.sdsc.comparison
+package chrism.sdsc.model
 
 final case class CountableWord(word: String, frequency: Long = 1L) {
 

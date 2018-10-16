@@ -2,6 +2,7 @@ package chrism.sdsc.comparison
 
 import java.util.concurrent.ThreadLocalRandom
 
+import chrism.sdsc.model.CountableWord
 import chrism.sdsc.{TestSparkSessionMixin, TestSuite}
 import org.apache.spark.sql.Dataset
 import org.junit.runner.RunWith
