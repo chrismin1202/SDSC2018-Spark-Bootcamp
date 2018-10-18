@@ -47,6 +47,7 @@ final class CsvExamples extends TestSuite with TestSparkSessionMixin with TestHa
 
     // collect all episodes written and directed by Vince Gilligan
 
+    // SELECT df.primary_writer FROM df WHERE df.primary_writer = 'Vince Gilligan'
     // DataFrame version
     val numEpisodes1 = df
       .where(
@@ -54,7 +55,6 @@ final class CsvExamples extends TestSuite with TestSparkSessionMixin with TestHa
           (df("director") === VinceGilliganCol))
       .count()
     assert(numEpisodes1 === 4L)
-    //      .groupBy("title", "primary_writer", "secondary_writer", "director")
 
     // implicitly converting to Dataset
     val ds = df.as[CsvRow]
@@ -65,6 +65,16 @@ final class CsvExamples extends TestSuite with TestSparkSessionMixin with TestHa
         r.director == VinceGilligan)
       .count()
     assert(numEpisodes2 === 4L)
+
+    // SQL version
+    df.createOrReplaceTempView("bb")
+    spark.sql(
+      s"""SELECT
+         |  count(*)
+         |FROM bb
+         |WHERE (primary_writer = '$VinceGilligan' OR secondary_writer = '$VinceGilligan')
+         |  AND director = '$VinceGilligan'""".stripMargin)
+      .show(10)
 
     df.unpersist()
   }
