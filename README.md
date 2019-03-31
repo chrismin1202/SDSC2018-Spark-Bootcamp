@@ -1,5 +1,8 @@
 # SDSC2018-Spark-Bootcamp Code Examples
 
+DEPRECATED.
+This repository is no longer maintained. The materials have been ported over to [spark-bootcamp](https://github.com/chrismin1202/spark-bootcamp).
+
 This repository contains code samples for Apache Spark/Spark MLlib Workshop @ [SDSC](https://www.southerndatascience.com/) 2018.
 
 * Scala Version: 2.11.12 (You can downgrade, but I recommend 2.11.8 or higher)
